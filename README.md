@@ -7,4 +7,5 @@ Store counters for hashed errors.
 3. `Log(T)` error (or any other type).
 4. Print counters with `Pretty()`.
 
+See [example](https://godoc.org/github.com/mattes/errorstats#example-Stats-JSON).
 
