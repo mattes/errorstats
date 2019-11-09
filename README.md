@@ -1,4 +1,4 @@
-# errorstats
+# errorstats [![GoDoc](https://godoc.org/github.com/mattes/errorstats?status.svg)](https://godoc.org/github.com/mattes/errorstats)
 
 Store counters for hashed errors.
 
