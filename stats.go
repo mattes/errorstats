@@ -51,6 +51,10 @@ func (s *Stats) DeleteEncoder(typ interface{}) {
 
 // Log increases counter for v
 func (s *Stats) Log(v interface{}) {
+	if v == nil {
+		return
+	}
+
 	key := s.Visit("", v)
 	if key == "" {
 		return
