@@ -3,6 +3,7 @@ package errorstats
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"reflect"
 	"sort"
 	"strconv"
@@ -34,11 +35,18 @@ func New() *Stats {
 	return s
 }
 
-// Reset resets counters
-func (s *Stats) Reset() {
-	s.countersMu.Lock()
-	s.counters = make(map[string]uint64)
-	s.countersMu.Unlock()
+// SetEncoder sets a EncoderFunc for a typ
+func (s *Stats) SetEncoder(typ interface{}, fn EncoderFunc) {
+	s.keyFuncsMu.Lock()
+	s.keyFuncs[typeOf(typ)] = fn
+	s.keyFuncsMu.Unlock()
+}
+
+// DeleteEncoder removes EncoderFunc set for typ
+func (s *Stats) DeleteEncoder(typ interface{}) {
+	s.keyFuncsMu.Lock()
+	delete(s.keyFuncs, typeOf(typ))
+	s.keyFuncsMu.Unlock()
 }
 
 // Log increases counter for v
@@ -88,18 +96,37 @@ func (s *Stats) Visit(key string, v ...interface{}) string {
 	return key
 }
 
-// SetEncoder sets a EncoderFunc for a typ
-func (s *Stats) SetEncoder(typ interface{}, fn EncoderFunc) {
-	s.keyFuncsMu.Lock()
-	s.keyFuncs[typeOf(typ)] = fn
-	s.keyFuncsMu.Unlock()
+// Reset resets counters
+func (s *Stats) Reset() {
+	s.countersMu.Lock()
+	s.counters = make(map[string]uint64)
+	s.countersMu.Unlock()
 }
 
-// DeleteEncoder removes EncoderFunc set for typ
-func (s *Stats) DeleteEncoder(typ interface{}) {
-	s.keyFuncsMu.Lock()
-	delete(s.keyFuncs, typeOf(typ))
-	s.keyFuncsMu.Unlock()
+// Err returns an error if any errors have been logged, otherwise nil.
+func (s *Stats) Err() error {
+	s.countersMu.RLock()
+	defer s.countersMu.RUnlock()
+	if len(s.counters) == 0 {
+		return nil
+	}
+
+	return errors.New(s.json())
+}
+
+// ErrAndReset atomically returns an error and resets them
+// if any errors have been logged, otherwise nil.
+func (s *Stats) ErrAndReset() error {
+	s.countersMu.Lock()
+	defer s.countersMu.Unlock()
+
+	if len(s.counters) == 0 {
+		return nil
+	}
+
+	err := errors.New(s.json())
+	s.counters = make(map[string]uint64)
+	return err
 }
 
 // String returns stats
@@ -111,7 +138,12 @@ func (s *Stats) String() string {
 func (s *Stats) JSON() string {
 	s.countersMu.RLock()
 	defer s.countersMu.RUnlock()
+	return s.json()
+}
 
+// json returns stats as JSON, it must be safeguarded
+// with a read lock on s.countersMu
+func (s *Stats) json() string {
 	buf := bytes.NewBuffer(nil)
 	e := json.NewEncoder(buf)
 	e.SetEscapeHTML(false)

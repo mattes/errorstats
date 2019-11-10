@@ -135,3 +135,47 @@ func BenchmarkLog(b *testing.B) {
 		s.Log(e)
 	}
 }
+
+func TestErr(t *testing.T) {
+	{
+		s := New()
+		s.Log(newErr())
+		if err := s.Err(); err == nil {
+			t.Error("expected err != nil")
+		}
+		if len(s.counters) != 1 {
+			t.Error("didn't expect counter reset")
+		}
+	}
+	{
+		s := New()
+		if err := s.Err(); err != nil {
+			t.Error("expected err == nil")
+		}
+		if len(s.counters) != 0 {
+			t.Error("no error was ever logged")
+		}
+	}
+}
+
+func TestErrAndReset(t *testing.T) {
+	{
+		s := New()
+		s.Log(newErr())
+		if err := s.ErrAndReset(); err == nil {
+			t.Error("expected err != nil")
+		}
+		if len(s.counters) != 0 {
+			t.Error("expected counter reset")
+		}
+	}
+	{
+		s := New()
+		if err := s.ErrAndReset(); err != nil {
+			t.Error("expected err == nil")
+		}
+		if len(s.counters) != 0 {
+			t.Error("expected counter reset")
+		}
+	}
+}
