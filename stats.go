@@ -21,31 +21,46 @@ type Stats struct {
 	counters   map[string]uint64
 	countersMu sync.RWMutex
 
-	keyFuncs   map[reflect.Type]EncoderFunc
-	keyFuncsMu sync.RWMutex
+	keyFuncsByType   map[reflect.Type]EncoderFunc
+	keyFuncsByString map[string]EncoderFunc // by string allows to intercept private errors
+	keyFuncsMu       sync.RWMutex
 }
 
 // New returns a new Stats instance
 func New() *Stats {
 	s := &Stats{
-		counters: make(map[string]uint64),
-		keyFuncs: make(map[reflect.Type]EncoderFunc),
+		counters:         make(map[string]uint64),
+		keyFuncsByType:   make(map[reflect.Type]EncoderFunc),
+		keyFuncsByString: make(map[string]EncoderFunc),
 	}
 
 	return s
 }
 
-// SetEncoder sets a EncoderFunc for a typ
+// SetEncoder sets a EncoderFunc for a typ.
+// typ can be given as string, which allows to intercept private structs and errors.
 func (s *Stats) SetEncoder(typ interface{}, fn EncoderFunc) {
 	s.keyFuncsMu.Lock()
-	s.keyFuncs[typeOf(typ)] = fn
+
+	if str, ok := typ.(string); ok {
+		s.keyFuncsByString[str] = fn
+	} else {
+		s.keyFuncsByType[typeOf(typ)] = fn
+	}
+
 	s.keyFuncsMu.Unlock()
 }
 
 // DeleteEncoder removes EncoderFunc set for typ
 func (s *Stats) DeleteEncoder(typ interface{}) {
 	s.keyFuncsMu.Lock()
-	delete(s.keyFuncs, typeOf(typ))
+
+	if str, ok := typ.(string); ok {
+		delete(s.keyFuncsByString, str)
+	} else {
+		delete(s.keyFuncsByType, typeOf(typ))
+	}
+
 	s.keyFuncsMu.Unlock()
 }
 
@@ -89,11 +104,17 @@ func (s *Stats) Visit(key string, v ...interface{}) string {
 
 		// call encoder func for typ or if not available, just use typ's name.
 		s.keyFuncsMu.RLock()
-		if fn, ok := s.keyFuncs[typ]; ok {
+
+		if fn, ok := s.keyFuncsByType[typ]; ok {
 			key += fn(val)
+
+		} else if fn, ok := s.keyFuncsByString[typ.String()]; ok {
+			key += fn(val)
+
 		} else {
 			key += typ.String()
 		}
+
 		s.keyFuncsMu.RUnlock()
 	}
 
